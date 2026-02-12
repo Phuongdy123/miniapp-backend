@@ -3,63 +3,56 @@ const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
-
-// 1. Cấu hình CORS và JSON
 app.use(cors());
 app.use(express.json());
 
-// 2. Khóa bí mật (Khuyên dùng biến môi trường trên Vercel Dashboard)
+// Khóa bí mật lấy từ Environment Variables trên Vercel Dashboard
 const ZALO_SECRET_KEY = process.env.ZALO_SECRET_KEY || "08vwXY668Oh4P42I7qC8";
 
-// 3. API lấy số điện thoại
 app.post('/get-phone', async (req, res) => {
     const { accessToken, code } = req.body;
+    
+    // Log để kiểm tra trên Vercel Runtime Logs
+    console.log("📥 Request nhận được:", { hasToken: !!accessToken, hasCode: !!code });
 
     if (!accessToken || !code) {
-        return res.status(400).json({ 
-            success: false, 
-            message: "Thiếu accessToken hoặc code" 
-        });
+        return res.status(400).json({ success: false, message: "Thiếu accessToken hoặc code" });
     }
 
     try {
-        console.log("🚀 Đang thực hiện giải mã SĐT trên Vercel...");
-
         const response = await axios.get("https://graph.zalo.me/v2.0/me/info", {
             headers: {
-                "access_token": accessToken,
+                "access_token": accessToken, // Đã sửa đúng tên biến Zalo yêu cầu
                 "code": code,
                 "secret_key": ZALO_SECRET_KEY,
-                // BẮT BUỘC: Giả lập IP Việt Nam để vượt qua rào cản IP nước ngoài của Vercel
-                "X-Forwarded-For": "14.226.0.1", 
+                // Giả lập IP Việt Nam để vượt rào IP nước ngoài của Vercel
+                "X-Forwarded-For": "14.226.0.1",
                 "X-Real-IP": "14.226.0.1",
                 "Client-IP": "14.226.0.1"
             }
         });
 
-        const { data, error, message } = response.data;
+        console.log("📡 Zalo Response:", response.data);
 
-        if (error === 0) {
+        if (response.data.error === 0) {
             return res.json({
                 success: true,
-                phoneNumber: data.number
+                phoneNumber: response.data.data.number
             });
         } else {
             return res.status(400).json({
                 success: false,
-                message: message || "Lỗi từ phía Zalo"
+                message: response.data.message
             });
         }
-
     } catch (err) {
-        console.error("🔥 Lỗi Serverless:", err.message);
+        console.error("🔥 Server Error:", err.response ? err.response.data : err.message);
         return res.status(500).json({ 
             success: false, 
-            message: "Lỗi server nội bộ", 
+            message: "Lỗi kết nối Zalo API",
             error: err.message 
         });
     }
 });
 
-// THAY THẾ app.listen bằng module.exports
 module.exports = app;
