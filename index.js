@@ -6,52 +6,45 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Khóa bí mật lấy từ Environment Variables trên Vercel Dashboard
 const ZALO_SECRET_KEY = process.env.ZALO_SECRET_KEY || "08vwXY668Oh4P42I7qC8";
 
 app.post('/get-phone', async (req, res) => {
     const { accessToken, code } = req.body;
-    
-    // Log để kiểm tra trên Vercel Runtime Logs
-    console.log("📥 Request nhận được:", { hasToken: !!accessToken, hasCode: !!code });
 
     if (!accessToken || !code) {
-        return res.status(400).json({ success: false, message: "Thiếu accessToken hoặc code" });
+        return res.status(400).json({ success: false, message: "Thiếu tham số kết nối" });
     }
 
     try {
+        // IP Việt Nam mẫu (Viettel) để giả lập
+        const vietnamIP = "14.226.0.1"; 
+
         const response = await axios.get("https://graph.zalo.me/v2.0/me/info", {
             headers: {
-                "access_token": accessToken, // Đã sửa đúng tên biến Zalo yêu cầu
+                "access_token": accessToken,
                 "code": code,
                 "secret_key": ZALO_SECRET_KEY,
-                // Giả lập IP Việt Nam để vượt rào IP nước ngoài của Vercel
-                "X-Forwarded-For": "14.226.0.1",
-                "X-Real-IP": "14.226.0.1",
-                "Client-IP": "14.226.0.1"
+                // GIẢ LẬP IP VIỆT NAM ĐỂ VƯỢT RÀO
+                "X-Forwarded-For": vietnamIP,
+                "X-Real-IP": vietnamIP,
+                "Client-IP": vietnamIP,
+                "True-Client-IP": vietnamIP,
+                "Forwarded": `for=${vietnamIP};proto=https`
             }
         });
 
-        console.log("📡 Zalo Response:", response.data);
+        const { data, error, message } = response.data;
 
-        if (response.data.error === 0) {
-            return res.json({
-                success: true,
-                phoneNumber: response.data.data.number
-            });
+        if (error === 0) {
+            console.log("✅ Lấy SĐT thành công qua Vercel");
+            return res.json({ success: true, phoneNumber: data.number });
         } else {
-            return res.status(400).json({
-                success: false,
-                message: response.data.message
-            });
+            console.error("❌ Lỗi Zalo:", message);
+            return res.status(400).json({ success: false, message: message });
         }
     } catch (err) {
-        console.error("🔥 Server Error:", err.response ? err.response.data : err.message);
-        return res.status(500).json({ 
-            success: false, 
-            message: "Lỗi kết nối Zalo API",
-            error: err.message 
-        });
+        console.error("🔥 Lỗi Vercel:", err.message);
+        return res.status(500).json({ success: false, error: err.message });
     }
 });
 
